@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101827">
   <title>RGC Community Feedback</title>
   <meta name="description" content="Share feedback and suggestions with the RGC community.">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabaseClient/supabaseClient-js@2"></script>
   <style>
     :root{--bg:#0b1220;--panel:#111c2e;--panel2:#17243a;--line:#26364f;--text:#edf4ff;--muted:#9aabc3;--blue:#2798ff;--gold:#f4c15d;--red:#ef6262;--green:#42c98b}
     *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 15% 0%,#172d49 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.55 Inter,Segoe UI,Arial,sans-serif}
@@ -106,12 +106,12 @@
    Never put a service_role or secret key in this file.
    NEVER put a service_role or secret key in this file.
 ==================================================== */
-const SUPABASE_URL = "https://blxdysbggcxxuelunpof.supabase.co";
+const SUPABASE_URL = "https://blxdysbggcxxuelunpof.supabaseClient.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Y1gilZdh8K3_g-8ja7Adyw_AXK8Qebb";
 
 const $ = (id) => document.getElementById(id);
 const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("YOUR_") && !SUPABASE_ANON_KEY.includes("PASTE_YOUR_");
-let supabase = null, currentUser = null, channel = null;
+let supabaseClient = null, currentUser = null, channel = null;
 
 function notice(message, type="ok") {
   const el=$("notice"); el.textContent=message; el.className="notice show "+(type==="error"?"error":"ok");
@@ -127,7 +127,7 @@ function formatDate(value){
 }
 async function refreshSession(){
   if(!configured) return;
-  const {data:{session}}=await supabase.auth.getSession();
+  const {data:{session}}=await supabaseClient.auth.getSession();
   currentUser=session?.user || null;
   await updateAuthUI();
 }
@@ -140,7 +140,7 @@ async function updateAuthUI(){
 }
 async function loadReplies(){
   if(!configured){$("feed").innerHTML='<div class="empty">Connect Supabase to load public replies.</div>';return;}
-  const {data,error}=await supabase.from("public_replies").select("id,username,message,created_at").order("created_at",{ascending:false}).limit(300);
+  const {data,error}=await supabaseClient.from("public_replies").select("id,username,message,created_at").order("created_at",{ascending:false}).limit(300);
   if(error){$("feed").innerHTML='<div class="empty">Could not load replies. Check your Supabase table and Row Level Security setup.</div>';console.error(error);return;}
   renderReplies(data||[]);
 }
@@ -150,14 +150,14 @@ function renderReplies(rows){
   $("feed").innerHTML=rows.map(r=>`<article class="reply"><div class="reply-top"><span class="user">${escapeText(r.username)}</span><time class="date">${escapeText(formatDate(r.created_at))}</time></div><p>${escapeText(r.message)}</p></article>`).join("");
 }
 function subscribeRealtime(){
-  if(channel) supabase.removeChannel(channel);
-  channel=supabase.channel("public-replies-live").on("postgres_changes",{event:"INSERT",schema:"public",table:"public_replies"},()=>loadReplies()).subscribe();
+  if(channel) supabaseClient.removeChannel(channel);
+  channel=supabaseClient.channel("public-replies-live").on("postgres_changes",{event:"INSERT",schema:"public",table:"public_replies"},()=>loadReplies()).subscribe();
 }
 async function start(){
   if(!configured){$("setupWarning").style.display="block";$("feed").innerHTML='<div class="empty">Add your Supabase publishable key in the CONFIG section to connect the forum.</div>';return;}
-  supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
   // Supabase handles the Google OAuth callback and restores the session on return.
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user || null;
     await updateAuthUI();
     if(event === "SIGNED_IN") notice("Google sign-in successful. Welcome to the RGC community.");
@@ -171,7 +171,7 @@ async function start(){
 $("googleSignIn").addEventListener("click",async()=>{
   clearNotice();
   $("googleSignIn").disabled=true;
-  const {error}=await supabase.auth.signInWithOAuth({
+  const {error}=await supabaseClient.auth.signInWithOAuth({
     provider:"google",
     options:{redirectTo:"https://minergc.github.io/RGC2027/"}
   });
@@ -182,12 +182,12 @@ $("saveUsername").addEventListener("click",async()=>{
   if(username.length<3||username.length>30){notice("Username must be between 3 and 30 characters.","error");return;}
   if(!/^[\p{L}\p{N}_ .-]+$/u.test(username)){notice("Use letters, numbers, spaces, dots, underscores or hyphens only.","error");return;}
   $("saveUsername").disabled=true;
-  const {data,error}=await supabase.auth.updateUser({data:{username}});
+  const {data,error}=await supabaseClient.auth.updateUser({data:{username}});
   $("saveUsername").disabled=false;
   if(error){notice(error.message,"error");return;}
   currentUser=data.user;
   // Refresh the JWT so the database policy immediately sees the new username metadata.
-  const refreshed=await supabase.auth.refreshSession();
+  const refreshed=await supabaseClient.auth.refreshSession();
   if(!refreshed.error) currentUser=refreshed.data.session.user;
   await updateAuthUI(); notice("Username saved. You can now publish your feedback.");
 });
@@ -197,12 +197,12 @@ $("postReply").addEventListener("click",async()=>{
   if(!currentUser||!username){notice("Please sign in with Google and choose a username first.","error");return;}
   if(!message){notice("Please write your feedback before publishing.","error");return;}
   $("postReply").disabled=true;
-  const {error}=await supabase.from("public_replies").insert({user_id:currentUser.id,username,message});
+  const {error}=await supabaseClient.from("public_replies").insert({user_id:currentUser.id,username,message});
   $("postReply").disabled=false;
   if(error){notice(error.message,"error");return;}
   $("message").value=""; $("charCount").textContent="0 / 5000"; notice("Your reply has been published."); await loadReplies();
 });
-$("signOut").addEventListener("click",async()=>{const {error}=await supabase.auth.signOut();if(error){notice(error.message,"error");return;}currentUser=null;showStep("authStepGoogle");notice("You have signed out.");});
+$("signOut").addEventListener("click",async()=>{const {error}=await supabaseClient.auth.signOut();if(error){notice(error.message,"error");return;}currentUser=null;showStep("authStepGoogle");notice("You have signed out.");});
 if(configured) start(); else { $("setupWarning").style.display="block"; $("feed").innerHTML='<div class="empty">Supabase setup is required before the forum can go live.</div>'; }
 </script>
 </body>
