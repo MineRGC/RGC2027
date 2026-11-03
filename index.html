@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101827">
   <title>RGC Community Feedback</title>
   <meta name="description" content="Share feedback and suggestions with the RGC community.">
-  <script src="https://cdn.jsdelivr.net/npm/@supabaseClient/supabaseClient-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root{--bg:#0b1220;--panel:#111c2e;--panel2:#17243a;--line:#26364f;--text:#edf4ff;--muted:#9aabc3;--blue:#2798ff;--gold:#f4c15d;--red:#ef6262;--green:#42c98b}
     *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 15% 0%,#172d49 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.55 Inter,Segoe UI,Arial,sans-serif}
@@ -155,6 +155,11 @@ function subscribeRealtime(){
 }
 async function start(){
   if(!configured){$("setupWarning").style.display="block";$("feed").innerHTML='<div class="empty">Add your Supabase publishable key in the CONFIG section to connect the forum.</div>';return;}
+  if(!window.supabase || typeof window.supabase.createClient !== "function"){
+    notice("Supabase library did not load. Please check your internet connection or CDN access, then refresh the page.","error");
+    $("feed").innerHTML='<div class="empty">Unable to load the forum connection library. Please refresh the page.</div>';
+    return;
+  }
   supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
   // Supabase handles the Google OAuth callback and restores the session on return.
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
