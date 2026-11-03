@@ -47,26 +47,23 @@
   <section class="hero">
     <div class="eyebrow">Temporary community forum</div>
     <h1>Your feedback<br><span style="color:var(--gold)">matters.</span></h1>
-    <p>A place for the RGC community to share ideas, report issues and discuss improvements. Sign in with your email, choose a public username and join the conversation.</p>
-    <div class="stats"><div class="stat"><strong id="replyCount">0</strong> public replies</div><div class="stat"><strong>Live</strong> community discussion</div><div class="stat"><strong>Email</strong> verification required</div></div>
+    <p>A place for the RGC community to share ideas, report issues and discuss improvements. Sign in securely with Google, choose a public username and join the conversation.</p>
+    <div class="stats"><div class="stat"><strong id="replyCount">0</strong> public replies</div><div class="stat"><strong>Live</strong> community discussion</div><div class="stat"><strong>Google</strong> sign-in required</div></div>
   </section>
 
-  <div class="setup" id="setupWarning">Supabase is not configured yet. Add your Supabase Project URL and publishable/anon key in the CONFIG section of this HTML file, then run the SQL setup script included in the download.</div>
+  <div class="setup" id="setupWarning">Supabase is not configured yet. Add your Supabase publishable/anon key in the CONFIG section of this HTML file. The database setup has already been completed.</div>
 
   <div class="layout">
     <main>
       <section class="panel">
-        <div class="panel-head"><h2>Join the discussion</h2><p>One verified email account per contributor. Your chosen username will be visible publicly.</p></div>
+        <div class="panel-head"><h2>Join the discussion</h2><p>Sign in with your Google account, then choose the username shown beside your public replies.</p></div>
         <div class="form-body">
           <div class="notice" id="notice"></div>
-          <div id="authStepEmail">
-            <div class="field"><label for="email">Email address</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com"></div>
-            <div class="actions"><button class="primary" id="sendCode">Send verification code</button></div>
-            <div class="hint">We will email you a one-time code. Your email address is used for verification and is not displayed on public replies.</div>
-          </div>
-          <div id="authStepCode" hidden>
-            <div class="field"><label for="otp">Verification code</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter the code from your email"></div>
-            <div class="actions"><button class="primary" id="verifyCode">Verify email</button><button class="secondary" id="backEmail">Back</button></div>
+          <div id="authStepGoogle">
+            <div class="authbox"><p>Use your Google account to sign in. Your email address is used only for authentication and is never shown on public replies.</p>
+              <div class="actions"><button class="primary" id="googleSignIn">Continue with Google</button></div>
+            </div>
+            <div class="hint">After signing in for the first time, choose a public username before publishing.</div>
           </div>
           <div id="usernameStep" hidden>
             <div class="field"><label for="username">Choose your public username</label><input id="username" maxlength="30" autocomplete="nickname" placeholder="e.g. RGC_Player"></div>
@@ -94,7 +91,7 @@
       <ul><li>Be respectful to other community members.</li><li>Keep feedback relevant to RGC and its services.</li><li>Do not post passwords, private information or personal data.</li><li>Spam, abuse and malicious links are not welcome.</li></ul>
       <div class="rule"></div>
       <h3>How it works</h3>
-      <ul><li>Verify your email using a one-time code.</li><li>Choose a public display name.</li><li>Publish your reply directly to the forum.</li><li>All published replies are visible to visitors.</li></ul>
+      <ul><li>Sign in securely with your Google account.</li><li>Choose a public display name.</li><li>Publish your reply directly to the forum.</li><li>All published replies are visible to visitors.</li></ul>
       <div class="rule"></div>
       <p>Temporary forum · Replies are stored online until the forum owner removes them or deletes the project data.</p>
     </aside>
@@ -104,16 +101,16 @@
 
 <script>
 /* ===================== CONFIG =====================
-   Replace these two values with your Supabase project details.
-   Supabase Dashboard → Project Settings → API
-   Use the Project URL and the publishable/anon key only.
+   The project URL is already filled in. Add your Supabase publishable key below.
+   Supabase Dashboard → Project Settings → API Keys → Publishable key.
+   Never put a service_role or secret key in this file.
    NEVER put a service_role or secret key in this file.
 ==================================================== */
-const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
+const SUPABASE_URL = "https://blxdysbggcxxuelunpof.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Y1gilZdh8K3_g-8ja7Adyw_AXK8Qebb";
 
 const $ = (id) => document.getElementById(id);
-const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("YOUR_") && !SUPABASE_ANON_KEY.includes("YOUR_");
+const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("YOUR_") && !SUPABASE_ANON_KEY.includes("PASTE_YOUR_");
 let supabase = null, currentUser = null, channel = null;
 
 function notice(message, type="ok") {
@@ -121,7 +118,7 @@ function notice(message, type="ok") {
 }
 function clearNotice(){ $("notice").className="notice"; }
 function showStep(step){
-  ["authStepEmail","authStepCode","usernameStep","replyStep"].forEach(id=>$(id).hidden=true);
+  ["authStepGoogle","usernameStep","replyStep"].forEach(id=>$(id).hidden=true);
   $(step).hidden=false;
 }
 function escapeText(value){return String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -135,7 +132,7 @@ async function refreshSession(){
   await updateAuthUI();
 }
 async function updateAuthUI(){
-  if(!currentUser){showStep("authStepEmail");return;}
+  if(!currentUser){showStep("authStepGoogle");return;}
   const username=currentUser.user_metadata?.username;
   if(!username){showStep("usernameStep");return;}
   $("signedUsername").textContent=username;
@@ -157,30 +154,28 @@ function subscribeRealtime(){
   channel=supabase.channel("public-replies-live").on("postgres_changes",{event:"INSERT",schema:"public",table:"public_replies"},()=>loadReplies()).subscribe();
 }
 async function start(){
-  if(!configured){$("setupWarning").style.display="block";$("feed").innerHTML='<div class="empty">Forum setup required before replies can be loaded.</div>';return;}
+  if(!configured){$("setupWarning").style.display="block";$("feed").innerHTML='<div class="empty">Add your Supabase publishable key in the CONFIG section to connect the forum.</div>';return;}
   supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  // Supabase handles the Google OAuth callback and restores the session on return.
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    currentUser = session?.user || null;
+    await updateAuthUI();
+    if(event === "SIGNED_IN") notice("Google sign-in successful. Welcome to the RGC community.");
+    if(event === "SIGNED_OUT") notice("You have signed out.");
+  });
   await refreshSession(); await loadReplies(); subscribeRealtime();
+  const params = new URLSearchParams(window.location.search);
+  const authError = params.get("error_description") || params.get("error");
+  if(authError){ notice(decodeURIComponent(authError.replace(/\+/g," ")),"error"); history.replaceState({},document.title,window.location.pathname); }
 }
-$("sendCode").addEventListener("click",async()=>{
-  clearNotice(); const email=$("email").value.trim();
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){notice("Please enter a valid email address.","error");return;}
-  $("sendCode").disabled=true;
-  const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
-  $("sendCode").disabled=false;
-  if(error){notice(error.message,"error");return;}
-  showStep("authStepCode");notice("Verification code sent. Check your inbox (and spam folder).");
-});
-$("backEmail").addEventListener("click",()=>{clearNotice();showStep("authStepEmail");});
-$("verifyCode").addEventListener("click",async()=>{
-  clearNotice(); const email=$("email").value.trim(), token=$("otp").value.trim();
-  if(!token){notice("Enter the verification code from your email.","error");return;}
-  $("verifyCode").disabled=true;
-  const {data,error}=await supabase.auth.verifyOtp({email,token,type:"email"});
-  $("verifyCode").disabled=false;
-  if(error){notice(error.message,"error");return;}
-  currentUser=data.user; await updateAuthUI();
-  if(currentUser.user_metadata?.username) notice("Email verified. You can now publish a reply.");
-  else notice("Email verified. Choose a public username to continue.");
+$("googleSignIn").addEventListener("click",async()=>{
+  clearNotice();
+  $("googleSignIn").disabled=true;
+  const {error}=await supabase.auth.signInWithOAuth({
+    provider:"google",
+    options:{redirectTo:"https://minergc.github.io/RGC2027/"}
+  });
+  if(error){ $("googleSignIn").disabled=false; notice(error.message,"error"); }
 });
 $("saveUsername").addEventListener("click",async()=>{
   clearNotice(); const username=$("username").value.trim();
@@ -190,12 +185,16 @@ $("saveUsername").addEventListener("click",async()=>{
   const {data,error}=await supabase.auth.updateUser({data:{username}});
   $("saveUsername").disabled=false;
   if(error){notice(error.message,"error");return;}
-  currentUser=data.user; await updateAuthUI(); notice("Username saved. You can now publish your feedback.");
+  currentUser=data.user;
+  // Refresh the JWT so the database policy immediately sees the new username metadata.
+  const refreshed=await supabase.auth.refreshSession();
+  if(!refreshed.error) currentUser=refreshed.data.session.user;
+  await updateAuthUI(); notice("Username saved. You can now publish your feedback.");
 });
 $("message").addEventListener("input",()=>$("charCount").textContent=$("message").value.length+" / 5000");
 $("postReply").addEventListener("click",async()=>{
   clearNotice(); const message=$("message").value.trim(), username=currentUser?.user_metadata?.username;
-  if(!currentUser||!username){notice("Please verify your email and choose a username first.","error");return;}
+  if(!currentUser||!username){notice("Please sign in with Google and choose a username first.","error");return;}
   if(!message){notice("Please write your feedback before publishing.","error");return;}
   $("postReply").disabled=true;
   const {error}=await supabase.from("public_replies").insert({user_id:currentUser.id,username,message});
@@ -203,7 +202,7 @@ $("postReply").addEventListener("click",async()=>{
   if(error){notice(error.message,"error");return;}
   $("message").value=""; $("charCount").textContent="0 / 5000"; notice("Your reply has been published."); await loadReplies();
 });
-$("signOut").addEventListener("click",async()=>{await supabase.auth.signOut();currentUser=null;showStep("authStepEmail");notice("You have signed out.");});
+$("signOut").addEventListener("click",async()=>{const {error}=await supabase.auth.signOut();if(error){notice(error.message,"error");return;}currentUser=null;showStep("authStepGoogle");notice("You have signed out.");});
 if(configured) start(); else { $("setupWarning").style.display="block"; $("feed").innerHTML='<div class="empty">Supabase setup is required before the forum can go live.</div>'; }
 </script>
 </body>
